@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Machine — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="js/vendor/chart.umd.js"></script>
+<style>
+  .sensor-chart-wrap { margin-bottom: 22px; }
+  .sensor-chart-wrap h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--steel-light); margin-bottom: 8px; }
+  canvas { max-height: 160px; }
+</style>
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="page-wrap">
+      <div class="page-header">
+        <div>
+          <a href="dashboard.html" class="back-btn">← Back to Dashboard</a>
+          <h1 id="machine-title" class="mono">Loading…</h1>
+        </div>
+        <span class="chip" id="risk-chip"><span class="led"></span>—</span>
+      </div>
+
+      <div id="error-slot"></div>
+
+      <div class="two-col">
+        <div>
+          <section class="card">
+            <h3>Sensor Trends (last 6h)</h3>
+            <div id="charts-mount"><div class="loading-row">Loading sensor history…</div></div>
+          </section>
+
+          <section class="card" id="events-card" style="display:none">
+            <h3>Event-to-Unit Traceability</h3>
+            <div id="events-list"></div>
+          </section>
+        </div>
+
+        <div>
+          <section class="card">
+            <h3>Live Risk Assessment</h3>
+            <div id="risk-explain"><div class="loading-row">Loading…</div></div>
+          </section>
+
+          <section class="card">
+            <h3>Maintenance History</h3>
+            <div id="maint-history"><div class="loading-row">Loading…</div></div>
+          </section>
+
+          <section class="card">
+            <h3>Simulate an Event</h3>
+            <p class="sub" style="color:var(--muted); margin-bottom:10px;">Trigger a simulated foreign-object/scrap-debris detection on this machine to see the quarantine range compute live.</p>
+            <div class="field">
+              <label>Event type</label>
+              <select id="event-type">
+                <option value="foreign_object_detected">Foreign object detected</option>
+                <option value="scrap_debris">Scrap / debris</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Duration (seconds)</label>
+              <input type="number" id="event-duration" value="30" min="1" max="600" />
+            </div>
+            <button class="btn btn-primary" id="trigger-event-btn" style="width:100%">Trigger event</button>
+          </section>
+        </div>
+      </div>
+  </main>
+
+  <script type="module">
+    import { Api, Auth, toast, fmtTime } from "./js/api.js";
+    import { renderNav } from "./js/nav.js";
+    import { mountChatWidget } from "./js/chat-widget.js";
+    import { riskGaugeSVG } from "./js/gauge.js";
+
+    renderNav("dashboard");
+    mountChatWidget();
+
+    const params = new URLSearchParams(window.location.search);
+    const machineId = params.get("id");
+    const charts = {};
+
+    if (!machineId) {
+      document.getElementById("machine-title").textContent = "No machine specified";
+    }
+
+    function showError(msg) {
+      document.getElementById("error-slot").innerHTML = `<div class="error-banner">${msg}</div>`;
+    }
+
+    async function loadRisk() {
+      try {
+        const risk = await Api.machineRisk(machineId);
+        document.getElementById("machine-title").textContent = machineId;
+        const chip = document.getElementById("risk-chip");
+        chip.className = `badge badge-${risk.risk_level}`;
+        chip.innerHTML = `<span class="dot"></span>${risk.risk_score.toFixed(1)}% (${risk.risk_level})`;
+
+        document.getElementById("risk-explain").innerHTML = `
+          <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+            <div class="gauge-wrap">${riskGaugeSVG(risk.risk_score, 132)}</div>
+            <div style="flex:1; min-width:160px;">
+              <div class="confidence-bar"><span style="width:${risk.confidence * 100}%"></span></div>
+              <div style="font-size:12px; color:var(--muted); margin:6px 0 0;">confidence ${(risk.confidence * 100).toFixed(0)}% · computed ${fmtTime(risk.computed_at)}</div>
+            </div>
+          </div>
+          <div class="explain" style="margin-top:12px;">
+            <strong style="font-size:12px;">Based on:</strong> ${risk.based_on}
+            <ul class="factors">${risk.contributing_factors.map((f) => `<li>${f}</li>`).join("")}</ul>
+          </div>
+        `;
+      } catch (err) {
+        showError(`Couldn't load risk score: ${err.detail || err.message}`);
+      }
+    }
+
+    function buildChart(canvasId, label, points, color) {
+      const ctx = document.getElementById(canvasId).getContext("2d");
+      const labels = points.map((p) => new Date(p.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      const data = points.map((p) => p.value);
+      const pointColors = points.map((p) => (p.is_anomalous ? "#e0555a" : color));
+      return new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label, data, borderColor: color, backgroundColor: color + "22",
+            pointBackgroundColor: pointColors, pointRadius: points.length > 60 ? 0 : 2.5,
+            tension: 0.25, spanGaps: true,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#7d8a9a", maxTicksLimit: 8 }, grid: { color: "#2c3543" } },
+            y: { ticks: { color: "#7d8a9a" }, grid: { color: "#2c3543" } },
+          },
+        },
+      });
+    }
+
+    async function loadReadings() {
+      try {
+        const data = await Api.machineReadings(machineId, 6);
+        const mount = document.getElementById("charts-mount");
+        const sensorColors = { temperature: "#e8a33d", pressure: "#3f7fff", vibration: "#e0555a", humidity: "#3fa672" };
+        const entries = Object.entries(data.readings).filter(([, pts]) => pts.length > 0);
+        if (!entries.length) {
+          mount.innerHTML = `<div class="empty-state">No sensor data in the last 6 hours for this machine.</div>`;
+          return;
+        }
+        mount.innerHTML = entries.map(([sensorType]) => `
+          <div class="sensor-chart-wrap">
+            <h4>${sensorType}</h4>
+            <canvas id="chart-${sensorType}"></canvas>
+          </div>
+        `).join("");
+        if (typeof Chart === "undefined") {
+          // The chart library failed to load (e.g. served from behind a
+          // path the browser couldn't reach). Fall back to a plain table
+          // per sensor instead of leaving a blank/broken chart area.
+          mount.innerHTML = entries.map(([sensorType, points]) => `
+            <div class="sensor-chart-wrap">
+              <h4>${sensorType} <span style="text-transform:none; color:var(--steel); font-weight:400;">(chart library unavailable — showing raw values)</span></h4>
+              <table><tbody>
+                ${points.slice(-12).map((p) => `<tr><td class="mono" style="font-size:11px;">${new Date(p.timestamp).toLocaleTimeString()}</td><td class="mono">${p.value ?? "—"}</td>${p.is_anomalous ? '<td><span class="chip chip-high">anomalous</span></td>' : "<td></td>"}</tr>`).join("")}
+              </tbody></table>
+            </div>
+          `).join("");
+        } else {
+          entries.forEach(([sensorType, points]) => {
+            buildChart(`chart-${sensorType}`, sensorType, points, sensorColors[sensorType] || "#3f7fff");
+          });
+        }
+
+        document.getElementById("maint-history").innerHTML = data.maintenance_history.length
+          ? `<table><tbody>${data.maintenance_history.map((m) => `
+              <tr><td>${fmtTime(m.timestamp)}</td><td>${m.maintenance_type}</td><td>${m.performed_by}</td></tr>
+            `).join("")}</tbody></table>`
+          : `<div class="empty-state">No maintenance history on file.</div>`;
+      } catch (err) {
+        showError(`Couldn't load sensor readings: ${err.detail || err.message}`);
+      }
+    }
+
+    async function loadEvents() {
+      try {
+        const events = (await Api.listEvents()).filter((e) => e.machine_id === machineId);
+        if (!events.length) return;
+        document.getElementById("events-card").style.display = "block";
+        document.getElementById("events-list").innerHTML = events.map((e) => `
+          <div style="padding:10px 0; border-bottom:1px solid var(--line);">
+            <div style="display:flex; justify-content:space-between;">
+              <strong style="font-size:13px;">${e.event_type.replace(/_/g, " ")}</strong>
+              <span class="chip chip-${e.status === "quarantined" ? "high" : e.status === "released" ? "low" : "info"}">${e.status}</span>
+            </div>
+            <div class="mono" style="font-size:13px; margin:6px 0; color:var(--amber);">units #${e.affected_unit_start}–#${e.affected_unit_end} (${e.affected_unit_count} units)</div>
+            <div style="font-size:12px; color:var(--steel-light);">${e.recommended_action}</div>
+            <div style="font-size:11px; color:var(--steel); margin-top:4px;">${fmtTime(e.start_time)} · recurrence #${e.recurrence_count}</div>
+          </div>
+        `).join("");
+      } catch (err) { /* non-fatal */ }
+    }
+
+    document.getElementById("trigger-event-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try {
+        const result = await Api.triggerEvent({
+          machine_id: machineId,
+          event_type: document.getElementById("event-type").value,
+          duration_seconds: Number(document.getElementById("event-duration").value),
+        });
+        toast(`Event ${result.event_id}: quarantine units #${result.affected_unit_start}–#${result.affected_unit_end}.`);
+        await loadEvents();
+      } catch (err) {
+        toast(err.detail || "Could not trigger event.", "error");
+      } finally {
+        e.target.disabled = false;
+      }
+    });
+
+    if (machineId) {
+      loadRisk();
+      loadReadings();
+      loadEvents();
+    }
+  </script>
+</body>
+</html>

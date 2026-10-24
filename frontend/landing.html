@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QualityGuard AI — Explainable quality intelligence for the factory floor</title>
+<meta name="description" content="Predicts defects before they occur, shows its reasoning, and routes every recommendation to a human for approve/reject/modify — with a full audit trail." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #12161d;
+    --steel: #5b6472;
+    --steel-light: #8b93a0;
+    --paper: #eef1f4;
+    --paper-raised: #ffffff;
+    --line: #dbe0e6;
+    --accent: #b45309;
+    --accent-soft: #fbf0e2;
+    --confid: #4338ca;
+    --confid-soft: #eeecfb;
+    --green: #059669;
+    --green-soft: #e5f4ee;
+    --red: #dc2626;
+    --font-display: "Space Grotesk", sans-serif;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--font-body); line-height: 1.55; font-size: 16px;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 42px 42px;
+    background-position: -1px -1px;
+    background-attachment: fixed;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+  header.top nav.top-links { display: flex; align-items: center; gap: 22px; }
+  header.top nav.top-links a.quiet { font-size: 14px; color: var(--steel); text-decoration: none; font-weight: 500; }
+  header.top nav.top-links a.quiet:hover { color: var(--ink); }
+  header.top a.cta-small {
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    border: 1px solid var(--ink); padding: 8px 16px; border-radius: 6px; color: var(--ink); background: var(--paper-raised);
+  }
+  header.top a.cta-small:hover { background: var(--ink); color: var(--paper-raised); }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 44px 0 8px; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--steel); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .eyebrow .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    font-family: var(--font-display); font-size: clamp(32px, 4.8vw, 52px); font-weight: 700;
+    letter-spacing: -0.015em; margin: 0 0 18px; max-width: 17ch;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .hero-sub { font-size: 17.5px; color: var(--steel); max-width: 56ch; margin-bottom: 26px; }
+  .hero-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cta-primary {
+    display: inline-block; background: var(--ink); color: var(--paper-raised); font-weight: 600;
+    padding: 13px 24px; border-radius: 8px; text-decoration: none; font-size: 15px;
+  }
+  .cta-primary:hover { background: var(--accent); }
+  .hero-actions .hint { font-size: 13px; color: var(--steel-light); font-family: var(--font-mono); }
+
+  /* ---------- USP banner ---------- */
+  .usp-banner {
+    display: flex; align-items: flex-start; gap: 14px;
+    background: var(--confid-soft); border: 1px solid #d8d4f7; border-left: 3px solid var(--confid);
+    border-radius: 10px; padding: 16px 20px; margin: 30px 0 0;
+  }
+  .usp-banner .mark { font-family: var(--font-display); font-size: 20px; color: var(--confid); flex-shrink: 0; line-height: 1.4; }
+  .usp-banner p { margin: 0; font-size: 15px; color: var(--ink); line-height: 1.55; }
+  .usp-banner p b { font-weight: 600; }
+
+  /* ---------- Stat strip ---------- */
+  .stat-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    margin: 38px 0 48px; background: var(--paper-raised);
+  }
+  .stat { padding: 18px 20px; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: none; }
+  .stat .num { font-family: var(--font-mono); font-size: 24px; font-weight: 500; color: var(--ink); }
+  .stat .label { font-size: 12px; color: var(--steel); margin-top: 3px; line-height: 1.4; }
+  @media (max-width: 760px) {
+    .stat-strip { grid-template-columns: repeat(2, 1fr); }
+    .stat:nth-child(2n+1) { border-left: none; }
+    .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+  }
+
+  /* ---------- Signature: live trace panel ---------- */
+  .trace-section { margin: 0 0 60px; }
+  .trace-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .trace-head h2 { font-family: var(--font-display); font-size: 20px; font-weight: 700; margin: 0; }
+  .trace-head .src {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--steel);
+    background: var(--paper-raised); border: 1px solid var(--line); padding: 3px 9px; border-radius: 20px;
+  }
+  .trace-panel {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
+    padding: 28px 24px;
+  }
+  .trace-input {
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--steel);
+    background: var(--paper); border: 1px dashed var(--line); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 22px;
+  }
+  .trace-input b { color: var(--ink); font-weight: 600; }
+  .trace-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative; }
+  .trace-steps::before {
+    content: ""; position: absolute; top: 20px; left: 4%; right: 4%; height: 0;
+    border-top: 1.5px dashed var(--line); z-index: 0;
+  }
+  .t-step { position: relative; z-index: 1; padding: 0 8px; text-align: left; }
+  .t-step .dot {
+    width: 40px; height: 40px; border-radius: 10px; background: var(--paper-raised);
+    border: 2px solid var(--line); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--steel);
+    margin-bottom: 12px;
+  }
+  .t-step.pass .dot { border-color: var(--red); color: var(--red); background: #fdecec; }
+  .t-step.open .dot { border-color: var(--ink); color: var(--ink); background: var(--paper); }
+  .t-step.rca .dot { border-color: var(--confid); color: var(--confid); background: var(--confid-soft); }
+  .t-step.rec .dot { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .t-step.review .dot { border-color: var(--green); color: var(--green); background: var(--green-soft); }
+  .t-step .k { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--steel-light); margin-bottom: 4px; }
+  .t-step h4 { font-family: var(--font-display); font-size: 14.5px; margin: 0 0 5px; }
+  .t-step p { font-size: 12.5px; color: var(--steel); margin: 0; }
+  .t-step .conf { font-family: var(--font-mono); font-size: 12px; margin-top: 6px; font-weight: 600; }
+  .t-step.rca .conf { color: var(--confid); }
+  .t-step.rec .conf { color: var(--accent); }
+  @media (max-width: 900px) {
+    .trace-steps { grid-template-columns: 1fr; gap: 18px; }
+    .trace-steps::before { display: none; }
+    .t-step { padding-left: 16px; border-left: 2px dashed var(--line); padding-bottom: 4px; }
+  }
+
+  /* ---------- Feature overview ---------- */
+  .features { padding: 6px 0 56px; }
+  .section-head { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .section-sub { color: var(--steel); margin-bottom: 26px; font-size: 15px; max-width: 62ch; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 820px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .feature-grid { grid-template-columns: 1fr; } }
+  .feature { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 16px; }
+  .feature .glyph { font-family: var(--font-mono); font-size: 12px; color: var(--accent); margin-bottom: 10px; }
+  .feature h3 { font-family: var(--font-display); font-size: 16px; margin: 0 0 6px; }
+  .feature p { font-size: 13.5px; color: var(--steel); margin: 0; }
+
+  /* ---------- Explainable-by-design ---------- */
+  .principles { padding: 6px 0 58px; }
+  .principle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 820px) { .principle-grid { grid-template-columns: 1fr; } }
+  .principle {
+    border: 1px solid var(--line); border-radius: 10px; padding: 20px 20px 18px; background: var(--paper-raised);
+    border-top: 3px solid var(--confid);
+  }
+  .principle:nth-child(2) { border-top-color: var(--accent); }
+  .principle:nth-child(3) { border-top-color: var(--green); }
+  .principle h3 { font-family: var(--font-display); font-size: 15.5px; margin: 0 0 8px; }
+  .principle p { font-size: 13.5px; color: var(--steel); margin: 0; }
+  .principle .kicker { font-family: var(--font-mono); font-size: 11px; color: var(--steel-light); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+
+  /* ---------- Role scope: interactive tabs ---------- */
+  .role-scope { padding: 6px 0 58px; }
+  .scope-panel {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px;
+    padding: 24px; display: grid; grid-template-columns: 200px 1fr; gap: 24px;
+  }
+  .role-tabs { display: flex; flex-direction: column; gap: 4px; }
+  .role-tab {
+    text-align: left; background: none; border: none; border-radius: 8px;
+    padding: 10px 12px; font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    color: var(--steel); cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  }
+  .role-tab:hover { background: var(--paper); color: var(--ink); }
+  .role-tab.active { background: var(--ink); color: var(--paper-raised); }
+  .role-tab .n { font-family: var(--font-mono); font-size: 11px; opacity: 0.6; }
+  .scope-detail { min-width: 0; }
+  .scope-detail .role-name { font-family: var(--font-display); font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+  .scope-detail .role-desc { color: var(--steel); font-size: 14px; margin-bottom: 18px; }
+  .scope-rows { display: flex; flex-direction: column; gap: 10px; }
+  .scope-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px dashed var(--line); }
+  .scope-row:first-child { border-top: none; padding-top: 0; }
+  .scope-row .mark {
+    width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  }
+  .scope-row.can .mark { background: var(--accent-soft); color: var(--accent); }
+  .scope-row.cannot .mark { background: #fdecec; color: var(--red); }
+  .scope-row .txt { font-size: 14px; }
+  .scope-row .txt b { font-weight: 600; }
+  @media (max-width: 720px) {
+    .scope-panel { grid-template-columns: 1fr; }
+    .role-tabs { flex-direction: row; flex-wrap: wrap; }
+    .role-tab { flex: 1 1 auto; }
+  }
+
+  /* ---------- CTA ---------- */
+  .closing-cta {
+    background: var(--ink); color: var(--paper); border-radius: 16px;
+    padding: 40px 32px; margin-bottom: 60px;
+    display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center;
+  }
+  .closing-cta h2 { font-family: var(--font-display); font-size: 24px; margin: 0 0 10px; }
+  .closing-cta p { color: #b7bdc6; margin: 0 0 20px; font-size: 14.5px; }
+  .closing-cta a.cta-big {
+    display: inline-block; background: var(--accent); color: #fff; font-weight: 600;
+    padding: 13px 26px; border-radius: 8px; text-decoration: none; font-size: 15px;
+  }
+  .closing-cta a.cta-big:hover { background: #c9822e; }
+  .creds { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px 16px; }
+  .creds .row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12.5px; padding: 5px 0; color: #cfd4db; }
+  .creds .row b { color: #fff; font-weight: 500; }
+  .creds .row + .row { border-top: 1px dashed rgba(255,255,255,0.1); }
+  @media (max-width: 720px) { .closing-cta { grid-template-columns: 1fr; } }
+
+  footer { text-align: center; padding: 20px 0 40px; color: var(--steel-light); font-size: 12px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hero, .stat-strip, .trace-panel, .feature, .principle, .scope-panel { animation: rise 0.5s ease both; }
+    .stat-strip { animation-delay: 0.05s; }
+    .trace-panel { animation-delay: 0.1s; }
+    .feature:nth-child(1) { animation-delay: 0.05s; } .feature:nth-child(2) { animation-delay: 0.1s; }
+    .feature:nth-child(3) { animation-delay: 0.15s; } .feature:nth-child(4) { animation-delay: 0.2s; }
+    .feature:nth-child(5) { animation-delay: 0.25s; } .feature:nth-child(6) { animation-delay: 0.3s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span class="dot"></span> QualityGuard AI</div>
+      <nav class="top-links">
+        <a class="quiet" href="#trace">Live trace</a>
+        <a class="quiet" href="#roles">Roles</a>
+        <a class="quiet" href="#explainable">Explainability</a>
+        <a class="cta-small" href="login.html">Sign in</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow"><span class="pulse"></span> Predictive quality control · explainable by design</div>
+      <h1>Every prediction shows its <em>work</em> — every action needs a human's <em>sign-off</em>.</h1>
+      <p class="hero-sub">QualityGuard AI ingests sensor, inspection, production, and maintenance data; predicts quality issues before they occur; identifies the root cause with a disclosed confidence score; and recommends a specific, precedent-backed fix. Nothing is applied automatically — every recommendation sits in a queue for a person to approve, reject, or modify, and every decision is written to the audit trail.</p>
+      <div class="hero-actions">
+        <a class="cta-primary" href="login.html">Sign in to QualityGuard AI</a>
+      </div>
+      <div class="usp-banner">
+        <span class="mark">"</span>
+        <p><b>QualityGuard AI predicts and traces quality issues before they ship</b> — with every score explained and every action requiring human approval, so it's built to be trusted and audited, not just accurate.</p>
+      </div>
+    </section>
+
+    <div class="stat-strip">
+      <div class="stat"><div class="num">6</div><div class="label">specialist agents, one orchestrator</div></div>
+      <div class="stat"><div class="num">7</div><div class="label">roles, scoped server-side, not just in the UI</div></div>
+      <div class="stat"><div class="num">Human is always in the Loop</div><div class="label"></div></div>
+    </div>
+
+    <section class="trace-section" id="trace">
+      <div class="trace-head">
+        <h2>What actually happens to one failed weld</h2>
+        <span class="src">real trace · not a mockup</span>
+      </div>
+      <div class="trace-panel">
+        <div class="trace-input">
+          Inspector <b>K. Reyes</b> logs a failed inspection on <b>BATCH-4471</b>, station <b>LINE2-WELD-01</b> — defect type <b>weld_crack</b>, note: "crack visible on weld seam."
+        </div>
+        <div class="trace-steps">
+          <div class="t-step pass">
+            <div class="dot">✕</div>
+            <div class="k">Inspection</div>
+            <h4>Fails at the station</h4>
+            <p>Logged via <code>/api/ingest/batch</code>. A failed inspection is a confirmed fact, not a forecast.</p>
+          </div>
+          <div class="t-step open">
+            <div class="dot">→</div>
+            <div class="k">Orchestrator</div>
+            <h4>Opens DEF-200016</h4>
+            <p>Defect row created instantly, source = <code>inspection</code>, status <code>open</code>.</p>
+          </div>
+          <div class="t-step rca">
+            <div class="dot">RCA</div>
+            <div class="k">RCA Agent</div>
+            <h4>Root cause: equipment</h4>
+            <p>Weighs sensor history, maintenance status, and material lot against documented defect-type priors.</p>
+            <div class="conf">confidence 0.40</div>
+          </div>
+          <div class="t-step rec">
+            <div class="dot">REC</div>
+            <div class="k">Recommendation Agent</div>
+            <h4>Inspect &amp; recalibrate</h4>
+            <p>Grounded against 2 precedents in the knowledge base (CASE-2000, CASE-2004) — confidence rises because evidence was found, not asserted.</p>
+            <div class="conf">confidence 0.58</div>
+          </div>
+          <div class="t-step review">
+            <div class="dot">⏸</div>
+            <div class="k">Routed to Maintenance</div>
+            <h4>Waiting on a human</h4>
+            <p><code>maintenance1</code> sees it as <code>pending</code>. Nothing happens until they approve, reject, or modify it — logged with reviewer, role, and timestamp.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="agents">
+      <div class="section-head">Six agents, one pipeline</div>
+      <div class="section-sub">Every score comes with a plain-language list of what drove it — the confidence number is never the whole answer.</div>
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="glyph">01 · PREDICT</div>
+          <h3>Defect risk scoring</h3>
+          <p>Continuous 0–100% risk per machine, blending disclosed-weight rule thresholds with a per-sensor IsolationForest — not a single opaque score.</p>
+        </div>
+        <div class="feature">
+          <div class="glyph">02 · DIAGNOSE</div>
+          <h3>Root cause &amp; routing</h3>
+          <p>Splits a defect across equipment, material, process, and human factors, and routes it to whoever can actually act on it.</p>
+        </div>
+        <div class="feature">
+          <div class="glyph">03 · RECOMMEND</div>
+          <h3>Grounded corrective actions</h3>
+          <p>Suggests a specific fix backed by precedent from resolved past cases in the knowledge base — never a guess dressed up as an answer.</p>
+        </div>
+        <div class="feature">
+          <div class="glyph">04 · FORECAST</div>
+          <h3>Pre-production risk</h3>
+          <p>Scores a scheduled batch before it even runs, from its material lot, machine health, and shift history.</p>
+        </div>
+        <div class="feature">
+          <div class="glyph">05 · TRACE</div>
+          <h3>Exact unit traceability</h3>
+          <p>Turns a foreign-object or scrap-debris event into a precise, quarantinable range of unit numbers — not "something may be wrong."</p>
+        </div>
+        <div class="feature">
+          <div class="glyph">06 · ASK</div>
+          <h3>A chatbot with one source of truth</h3>
+          <p>Ask "why is line 3 red" and get an answer pulled from the same tables the dashboard reads — scoped to your role, every time.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- <section class="principles" id="explainable">
+      <div class="section-head">Built to be audited, not just accurate</div>
+      <div class="section-sub">The spec called for explainability over black-box complexity — three ways that's enforced in the code, not just claimed on this page.</div>
+      <div class="principle-grid">
+        <div class="principle">
+          <div class="kicker">Rule-based + lightweight ML</div>
+          <h3>No unexplainable deep model</h3>
+          <p>Risk scores blend disclosed-weight thresholds with a per-sensor-type IsolationForest, so there's a statistical anomaly signal beyond fixed rules — and every score still lists its contributing factors in plain language.</p>
+        </div>
+        <div class="principle">
+          <div class="kicker">Held-out validation</div>
+          <h3>Tested against real outcomes</h3>
+          <p>The Pre-Production Risk Agent is scored against the most recent 25% of already-completed work orders, re-predicted as if they hadn't run yet, and checked against what actually happened — not against the same data it learned from.</p>
+        </div>
+        <div class="principle">
+          <div class="kicker">RBAC on every arrow</div>
+          <h3>Same scope, every surface</h3>
+          <p>The helper that filters a dashboard query also filters what the chatbot can retrieve and what a role is allowed to review — enforced server-side, so hitting the API directly can't bypass a role's scope.</p>
+        </div>
+      </div>
+    </section> -->
+
+    <section class="role-scope" id="roles">
+      <div class="section-head">One dashboard, scoped seven ways</div>
+      <div class="section-sub">Every role signs into the same app. What they see, review, and approve is enforced on the server — not just hidden in the UI. Pick a role to see its scope.</div>
+      <div class="scope-panel">
+        <div class="role-tabs" role="tablist" aria-label="Roles"></div>
+        <div class="scope-detail">
+          <div class="role-name"></div>
+          <div class="role-desc"></div>
+          <div class="scope-rows"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing-cta">
+      <div>
+        <h2>Sign in and trigger a live event</h2>
+        <p>Every role is pre-seeded, same password. Once you're in, hit "Simulate incoming data" on the dashboard and watch an alert and recommendation appear in real time — or trigger a foreign-object event from any machine's drill-down page.</p>
+        <a class="cta-big" href="login.html">Sign in to QualityGuard AI</a>
+      </div>
+      <div class="creds">
+        <div class="row"><span>quality manager</span><b>qualitymgr1 / demo1234</b></div>
+        <div class="row"><span>maintenance</span><b>maintenance1 / demo1234</b></div>
+        <div class="row"><span>operator (LINE3)</span><b>operator1 / demo1234</b></div>
+        <div class="row"><span>admin</span><b>admin1 / demo1234</b></div>
+      </div>
+    </section>
+
+    <footer>QualityGuard AI — hackathon prototype. All data shown is synthetic; not connected to a real factory.</footer>
+  </div>
+
+  <script>
+    const ROLES = [
+      {
+        key: "operator", label: "Operator", n: "1/7", name: "Operator",
+        desc: "Shop-floor worker, scoped to one production line (LINE3 in the demo).",
+        rows: [
+          { can: true, text: "View machine status and alerts for <b>their assigned line only</b>" },
+          { can: true, text: "Flag a defect they spot on the floor, on the spot" },
+          { can: false, text: "See other lines, plant-wide reports, or the audit log" },
+        ],
+      },
+      {
+        key: "maintenance", label: "Maintenance", n: "2/7", name: "Maintenance",
+        desc: "Owns anything the RCA Agent tags as equipment-related, plant-wide.",
+        rows: [
+          { can: true, text: "Review defects and RCAs tagged <b>equipment</b>-caused, across every line" },
+          { can: true, text: "Approve, reject, or modify recommendations routed to Maintenance" },
+          { can: false, text: "Review material- or process-caused issues" },
+        ],
+      },
+      {
+        key: "production", label: "Production", n: "3/7", name: "Production",
+        desc: "Supervises the line — owns process and human-factor issues, plant-wide.",
+        rows: [
+          { can: true, text: "Review defects tagged <b>process</b> or <b>human</b>-caused, plant-wide" },
+          { can: true, text: "View Operator Intelligence — shift and operator performance trends" },
+          { can: false, text: "Review equipment- or material-caused issues" },
+        ],
+      },
+      {
+        key: "procurement", label: "Procurement", n: "4/7", name: "Procurement",
+        desc: "Owns anything traced back to materials or suppliers, plant-wide.",
+        rows: [
+          { can: true, text: "Review defects and RCAs tagged <b>material</b>-caused, plant-wide" },
+          { can: true, text: "Approve, reject, or modify recommendations routed to Procurement" },
+          { can: false, text: "Review equipment- or process-caused issues" },
+        ],
+      },
+      {
+        key: "quality_manager", label: "Quality Manager", n: "5/7", name: "Quality Manager",
+        desc: "Plant-wide oversight across every category and every line.",
+        rows: [
+          { can: true, text: "See and review <b>every</b> defect, category, and line" },
+          { can: true, text: "Manage the knowledge base, finalize reports, view the audit log" },
+          { can: false, text: "Manage user accounts — that's Admin-only" },
+        ],
+      },
+      {
+        key: "plant_head", label: "Plant Head", n: "6/7", name: "Plant Head",
+        desc: "Executive view — same plant-wide reach as Quality Manager.",
+        rows: [
+          { can: true, text: "See and review <b>every</b> defect, category, and line" },
+          { can: true, text: "Finalize reports and view the audit log" },
+          { can: false, text: "Manage user accounts — that's Admin-only" },
+        ],
+      },
+      {
+        key: "admin", label: "Admin", n: "7/7", name: "Admin",
+        desc: "System administration, plus the same plant-wide visibility.",
+        rows: [
+          { can: true, text: "Create, deactivate, and assign roles to user accounts — <b>only</b> Admin can" },
+          { can: true, text: "Same plant-wide visibility as Quality Manager, plus the full audit log" },
+          { can: false, text: "Nothing else is withheld — Admin is the top of the access ladder" },
+        ],
+      },
+    ];
+
+    const tabsEl = document.querySelector(".role-tabs");
+    const nameEl = document.querySelector(".role-name");
+    const descEl = document.querySelector(".role-desc");
+    const rowsEl = document.querySelector(".scope-rows");
+
+    function renderRole(key) {
+      const role = ROLES.find(r => r.key === key);
+      nameEl.textContent = role.name;
+      descEl.textContent = role.desc;
+      rowsEl.innerHTML = role.rows.map(r => `
+        <div class="scope-row ${r.can ? "can" : "cannot"}">
+          <div class="mark">${r.can ? "✓" : "✕"}</div>
+          <div class="txt">${r.text}</div>
+        </div>
+      `).join("");
+      tabsEl.querySelectorAll(".role-tab").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.key === key);
+        btn.setAttribute("aria-selected", btn.dataset.key === key ? "true" : "false");
+      });
+    }
+
+    tabsEl.innerHTML = ROLES.map(r => `
+      <button class="role-tab" type="button" role="tab" data-key="${r.key}">
+        ${r.label} <span class="n">${r.n}</span>
+      </button>
+    `).join("");
+    tabsEl.querySelectorAll(".role-tab").forEach(btn => {
+      btn.addEventListener("click", () => renderRole(btn.dataset.key));
+    });
+    renderRole(ROLES[0].key);
+  </script>
+</body>
+</html>

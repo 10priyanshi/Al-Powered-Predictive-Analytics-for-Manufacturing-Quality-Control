@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reports — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="js/vendor/chart.umd.js"></script>
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="page-wrap">
+      <div class="page-header">
+        <div>
+          <h1>Reports</h1>
+          <div class="sub">Auto-generated shift/daily quality summaries — reviewable and editable before being marked final.</div>
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button data-tab="reports" class="active">Reports</button>
+        <button data-tab="kb" id="kb-tab-btn" style="display:none">Knowledge Base</button>
+        <button data-tab="operators" id="operators-tab-btn" style="display:none">Operator Intelligence</button>
+        <button data-tab="learning" id="learning-tab-btn" style="display:none">AI Performance</button>
+      </div>
+
+      <div id="error-slot"></div>
+
+      <div id="reports-tab">
+        <section class="card">
+          <h3>Generate a new report</h3>
+          <p class="sub" style="color:var(--steel); margin-bottom:10px;">Defaults to the last 7 days so it reliably catches your seeded demo data — narrow the window to see a true shift/daily slice.</p>
+          <form id="gen-form" class="grid grid-2">
+            <div class="field">
+              <label>Type</label>
+              <select id="gen-type"><option value="shift">Shift</option><option value="daily">Daily</option></select>
+            </div>
+            <div></div>
+            <div class="field">
+              <label>Period start</label>
+              <input type="datetime-local" id="gen-start" required />
+            </div>
+            <div class="field">
+              <label>Period end</label>
+              <input type="datetime-local" id="gen-end" required />
+            </div>
+          </form>
+          <button class="btn btn-primary" id="gen-btn">Generate report</button>
+        </section>
+
+        <section class="card">
+          <h3>Existing reports</h3>
+          <div id="report-list"><div class="loading-row">Loading…</div></div>
+        </section>
+
+        <section class="card" id="report-detail-card" style="display:none">
+          <h3 id="report-detail-title">Report detail</h3>
+          <div id="report-detail"></div>
+        </section>
+      </div>
+
+      <div id="kb-tab" style="display:none">
+        <section class="card">
+          <h3>Add a case</h3>
+          <form id="kb-form" class="grid grid-2">
+            <div class="field"><label>Defect type</label><input type="text" id="kb-defect-type" placeholder="e.g. weld_crack" required /></div>
+            <div class="field"><label>Category</label>
+              <select id="kb-category">
+                <option value="equipment">Equipment</option><option value="material">Material</option>
+                <option value="process">Process</option><option value="human">Human</option>
+              </select>
+            </div>
+            <div class="field" style="grid-column:1/-1;"><label>Description</label><textarea id="kb-description" rows="2" required></textarea></div>
+            <div class="field" style="grid-column:1/-1;"><label>Root cause</label><textarea id="kb-root-cause" rows="2" required></textarea></div>
+            <div class="field" style="grid-column:1/-1;"><label>Action taken</label><textarea id="kb-action" rows="2" required></textarea></div>
+            <div class="field" style="grid-column:1/-1;"><label>Outcome</label><input type="text" id="kb-outcome" required /></div>
+          </form>
+          <button class="btn btn-primary" id="kb-submit-btn">Add case</button>
+        </section>
+        <section class="card">
+          <h3>Case library</h3>
+          <div id="kb-list"><div class="loading-row">Loading…</div></div>
+        </section>
+      </div>
+
+      <div id="operators-tab" style="display:none">
+        <section class="card">
+          <h3>👥 Operator Quality Intelligence</h3>
+          <p class="sub" style="color:var(--muted); margin-bottom:10px;">Defect rate by operator and shift, computed from real inspection outcomes tied to production logs.</p>
+          <div id="op-insights"></div>
+        </section>
+        <div class="two-col">
+          <section class="card">
+            <h3>Shift Performance</h3>
+            <div id="shift-list"><div class="loading-row">Loading…</div></div>
+          </section>
+          <section class="card">
+            <h3>Operator Defect Rates</h3>
+            <div id="operator-list"><div class="loading-row">Loading…</div></div>
+          </section>
+        </div>
+      </div>
+
+      <div id="learning-tab" style="display:none">
+        <section class="card">
+          <h3>📈 Continuous Learning — Recommendation Accuracy Over Time</h3>
+          <p class="sub" style="color:var(--muted); margin-bottom:10px;" id="learning-note">Loading…</p>
+          <canvas id="learning-chart" height="90"></canvas>
+        </section>
+        <section class="card">
+          <div id="learning-table"><div class="loading-row">Loading…</div></div>
+        </section>
+      </div>
+  </main>
+
+  <script type="module">
+    import { Api, Auth, toast, fmtTime, downloadFile } from "./js/api.js";
+    import { renderNav } from "./js/nav.js";
+    import { mountChatWidget } from "./js/chat-widget.js";
+
+    renderNav("reports");
+    mountChatWidget();
+    const user = Auth.getUser();
+    const canFinalize = ["quality_manager", "plant_head", "admin"].includes(user.role);
+    const canEditKb = ["quality_manager", "admin"].includes(user.role);
+    const canViewOperators = ["production", "quality_manager", "plant_head", "admin"].includes(user.role);
+    const canViewLearning = ["quality_manager", "plant_head", "admin"].includes(user.role);
+    if (canEditKb) document.getElementById("kb-tab-btn").style.display = "inline-block";
+    if (canViewOperators) document.getElementById("operators-tab-btn").style.display = "inline-block";
+    if (canViewLearning) document.getElementById("learning-tab-btn").style.display = "inline-block";
+
+    const TAB_IDS = ["reports", "kb", "operators", "learning"];
+    document.querySelectorAll("#tabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#tabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        TAB_IDS.forEach((id) => {
+          const el = document.getElementById(`${id}-tab`);
+          if (el) el.style.display = btn.dataset.tab === id ? "block" : "none";
+        });
+        if (btn.dataset.tab === "kb") loadKb();
+        if (btn.dataset.tab === "operators") loadOperatorIntelligence();
+        if (btn.dataset.tab === "learning") loadLearningTrend();
+      });
+    });
+
+    // Default period: last 7 days, pre-filled for convenience. Widened
+    // from 24h because seeded demo data's timestamps end at whenever the
+    // seed script last ran, not "right now" - a literal last-24h window
+    // is frequently empty and looks like a broken report when it's
+    // actually just an accurate report of a genuinely quiet last day.
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    document.getElementById("gen-end").value = toLocalInput(now);
+    document.getElementById("gen-start").value = toLocalInput(weekAgo);
+    function toLocalInput(d) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    document.getElementById("gen-btn").addEventListener("click", async () => {
+      const btn = document.getElementById("gen-btn");
+      btn.disabled = true;
+      try {
+        const report = await Api.generateReport({
+          report_type: document.getElementById("gen-type").value,
+          period_start: new Date(document.getElementById("gen-start").value).toISOString(),
+          period_end: new Date(document.getElementById("gen-end").value).toISOString(),
+        });
+        toast(`Report ${report.report_id} generated.`);
+        await loadReports();
+        showReportDetail(report.report_id);
+      } catch (err) {
+        toast(err.detail || "Could not generate report.", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    async function loadReports() {
+      const list = document.getElementById("report-list");
+      try {
+        const reports = await Api.listReports();
+        if (!reports.length) {
+          list.innerHTML = `<div class="empty-state">No reports yet — generate one above.</div>`;
+          return;
+        }
+        list.innerHTML = `<table><thead><tr><th>Report</th><th>Type</th><th>Period</th><th>Status</th><th></th></tr></thead><tbody>
+          ${reports.map((r) => `
+            <tr>
+              <td class="mono">${r.report_id}</td>
+              <td>${r.report_type}</td>
+              <td>${fmtTime(r.period_start)} – ${fmtTime(r.period_end)}</td>
+              <td><span class="chip chip-${r.status === "final" ? "approved" : "pending"}">${r.status}</span></td>
+              <td><button class="btn btn-sm" data-view="${r.report_id}">View</button></td>
+            </tr>
+          `).join("")}
+        </tbody></table>`;
+        list.querySelectorAll("[data-view]").forEach((btn) => {
+          btn.addEventListener("click", () => showReportDetail(btn.dataset.view));
+        });
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Couldn't load reports.</div>`;
+      }
+    }
+
+    async function showReportDetail(reportId) {
+      const card = document.getElementById("report-detail-card");
+      const body = document.getElementById("report-detail");
+      card.style.display = "block";
+      document.getElementById("report-detail-title").textContent = `Report ${reportId}`;
+      try {
+        const r = await Api.getReport(reportId);
+        const c = r.content;
+        const rs = c.recommendations_summary || {};
+        const bq = c.batch_quality_summary || {};
+        const pp = c.preprod_summary || {};
+        const snapshot = c.machine_snapshot || [];
+        body.innerHTML = `
+          <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
+            <div><div class="readout mono" style="font-size:24px;">${c.defects_found}</div><div class="sub" style="color:var(--steel);">defects found</div></div>
+            <div><div class="readout mono" style="font-size:24px;">${c.alerts_raised}</div><div class="sub" style="color:var(--steel);">alerts raised</div></div>
+            <div><div class="readout mono" style="font-size:24px; color:${c.defect_trend_vs_previous_period_pct > 0 ? "var(--red)" : "var(--green)"}">${c.defect_trend_vs_previous_period_pct ?? "—"}%</div><div class="sub" style="color:var(--steel);">vs. previous period</div></div>
+            <div><div class="readout mono" style="font-size:24px;">${rs.approval_rate_pct ?? "—"}${rs.approval_rate_pct != null ? "%" : ""}</div><div class="sub" style="color:var(--steel);">recommendation approval rate</div></div>
+          </div>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light);">Alerts by severity</h4>
+          <table><tbody>
+            <tr><td>Critical</td><td class="mono">${c.alerts_by_severity?.critical ?? 0}</td></tr>
+            <tr><td>Warning</td><td class="mono">${c.alerts_by_severity?.warning ?? 0}</td></tr>
+            <tr><td>Info</td><td class="mono">${c.alerts_by_severity?.info ?? 0}</td></tr>
+          </tbody></table>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Categorization breakdown</h4>
+          <table><tbody>${Object.entries(c.categorization_breakdown).map(([k, v]) => `<tr><td>${k}</td><td class="mono">${v}</td></tr>`).join("") || "<tr><td>No categorized defects.</td></tr>"}</tbody></table>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Top defect types</h4>
+          <table><tbody>${c.top_root_causes.map((t) => `<tr><td>${t.defect_type}</td><td class="mono">${t.count}</td></tr>`).join("") || "<tr><td>None.</td></tr>"}</tbody></table>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Recommendations this period</h4>
+          <table><tbody>
+            <tr><td>Approved</td><td class="mono">${rs.approved ?? 0}</td></tr>
+            <tr><td>Modified</td><td class="mono">${rs.modified ?? 0}</td></tr>
+            <tr><td>Rejected</td><td class="mono">${rs.rejected ?? 0}</td></tr>
+            <tr><td>Still pending</td><td class="mono">${rs.pending ?? 0}</td></tr>
+          </tbody></table>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Actions taken (approved / modified)</h4>
+          <table><tbody>${c.actions_taken.map((a) => `<tr><td>${a.action}</td><td><span class="chip chip-${a.status}">${a.status}</span></td></tr>`).join("") || "<tr><td>None yet.</td></tr>"}</tbody></table>
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Batch quality</h4>
+          ${bq.scored_count ? `
+            <div class="sub" style="color:var(--steel); margin-bottom:8px;">${bq.scored_count} batch(es) scored, averaging ${bq.avg_quality_score}/100 — ${bq.high_risk_count} flagged high risk.</div>
+            <table><thead><tr><th>Work Order</th><th>Batch</th><th>Score</th><th>Risk</th></tr></thead><tbody>
+              ${bq.worst_batches.map((b) => `<tr><td class="mono">${b.work_order_id}</td><td class="mono">${b.batch_id}</td><td class="mono">${b.quality_score}/100</td><td><span class="chip chip-${b.risk_level}">${b.risk_level}</span></td></tr>`).join("")}
+            </tbody></table>
+          ` : `<div class="empty-state">No batches scored in this period.</div>`}
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Pre-production risk</h4>
+          ${pp.scanned_count ? `
+            <table><tbody>
+              <tr><td>Scheduled batches scanned</td><td class="mono">${pp.scanned_count}</td></tr>
+              <tr><td>Average risk score</td><td class="mono">${pp.avg_risk_score}%</td></tr>
+              <tr><td>Flagged high risk</td><td class="mono">${pp.high_risk_count}</td></tr>
+              <tr><td>Still awaiting review</td><td class="mono">${pp.pending_review_count}</td></tr>
+            </tbody></table>
+          ` : `<div class="empty-state">No pre-production scans in this period.</div>`}
+
+          <h4 style="font-size:12px; text-transform:uppercase; color:var(--steel-light); margin-top:14px;">Machine risk snapshot (right now)</h4>
+          ${snapshot.length ? `
+            <table><thead><tr><th>Machine</th><th>Risk</th><th>Level</th></tr></thead><tbody>
+              ${snapshot.map((m) => `<tr><td class="mono">${m.machine_id}</td><td class="mono">${m.risk_score}%</td><td><span class="chip chip-${m.risk_level}">${m.risk_level}</span></td></tr>`).join("")}
+            </tbody></table>
+          ` : `<div class="empty-state">No machine data available.</div>`}
+
+          <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="dl-html-btn">Download HTML</button>
+            <button class="btn btn-sm" id="dl-csv-btn">Download CSV</button>
+            ${r.status === "draft" && canFinalize ? `<button class="btn btn-sm btn-approve" id="finalize-btn">Mark final</button>` : ""}
+            ${r.status === "final" ? `<span class="chip chip-approved">Finalized by ${r.finalized_by}</span>` : ""}
+          </div>
+        `;
+        document.getElementById("finalize-btn")?.addEventListener("click", async () => {
+          try {
+            await Api.updateReport(reportId, { finalize: true });
+            toast("Report finalized.");
+            showReportDetail(reportId);
+            loadReports();
+          } catch (err) { toast(err.detail || "Could not finalize.", "error"); }
+        });
+        document.getElementById("dl-html-btn").addEventListener("click", async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            await downloadFile(`/api/reports/${encodeURIComponent(reportId)}/export?format=html`, `${reportId}.html`);
+          } catch (err) {
+            toast(err.detail || "Could not download the report.", "error");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+        document.getElementById("dl-csv-btn").addEventListener("click", async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            await downloadFile(`/api/reports/${encodeURIComponent(reportId)}/export?format=csv`, `${reportId}.csv`);
+          } catch (err) {
+            toast(err.detail || "Could not download the report.", "error");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      } catch (err) {
+        body.innerHTML = `<div class="empty-state">Couldn't load this report.</div>`;
+      }
+    }
+
+    async function loadKb() {
+      const list = document.getElementById("kb-list");
+      try {
+        const cases = await Api.listKnowledgeBase();
+        list.innerHTML = cases.length ? cases.map((c) => `
+          <div class="explain" style="margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between;">
+              <strong class="mono" style="font-size:12px;">${c.case_id}</strong>
+              <span class="chip chip-info">${c.category}</span>
+            </div>
+            <div style="margin:6px 0;">${c.description}</div>
+            <div style="font-size:12px; color:var(--steel-light);"><b>Root cause:</b> ${c.root_cause}</div>
+            <div style="font-size:12px; color:var(--steel-light);"><b>Action:</b> ${c.action_taken}</div>
+            <div style="font-size:12px; color:var(--green);"><b>Outcome:</b> ${c.outcome}</div>
+          </div>
+        `).join("") : `<div class="empty-state">No cases yet.</div>`;
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Couldn't load the knowledge base.</div>`;
+      }
+    }
+
+    document.getElementById("kb-submit-btn").addEventListener("click", async () => {
+      try {
+        await Api.createKnowledgeBaseCase({
+          defect_type: document.getElementById("kb-defect-type").value.trim(),
+          category: document.getElementById("kb-category").value,
+          description: document.getElementById("kb-description").value.trim(),
+          root_cause: document.getElementById("kb-root-cause").value.trim(),
+          action_taken: document.getElementById("kb-action").value.trim(),
+          outcome: document.getElementById("kb-outcome").value.trim(),
+        });
+        toast("Case added to knowledge base.");
+        document.getElementById("kb-form").reset();
+        loadKb();
+      } catch (err) {
+        toast(err.detail || "Could not add case.", "error");
+      }
+    });
+
+    async function loadOperatorIntelligence() {
+      const insightsEl = document.getElementById("op-insights");
+      const shiftEl = document.getElementById("shift-list");
+      const operatorEl = document.getElementById("operator-list");
+      try {
+        const data = await Api.operatorIntelligence();
+        insightsEl.innerHTML = data.insights.map((i) => `<div class="explain" style="margin-bottom:8px;">💡 ${i}</div>`).join("");
+
+        shiftEl.innerHTML = data.shifts.length ? `<table><thead><tr><th>Shift</th><th>Pass Rate</th><th>Inspections</th></tr></thead><tbody>
+          ${data.shifts.map((s) => `
+            <tr><td style="text-transform:capitalize;">${s.shift}</td>
+              <td><span class="badge badge-${s.pass_rate_pct >= 90 ? "low" : s.pass_rate_pct >= 75 ? "medium" : "high"}">${s.pass_rate_pct}%</span></td>
+              <td class="mono">${s.inspections}</td></tr>
+          `).join("")}
+        </tbody></table>` : `<div class="empty-state">No shift data available.</div>`;
+
+        operatorEl.innerHTML = data.operators.length ? `<table><thead><tr><th>Operator</th><th>Defect Rate</th><th>Inspections</th><th>Training</th></tr></thead><tbody>
+          ${data.operators.map((o) => `
+            <tr><td>${o.operator}</td>
+              <td><span class="badge badge-${o.defect_rate_pct >= 30 ? "high" : o.defect_rate_pct >= 15 ? "medium" : "low"}">${o.defect_rate_pct}%</span></td>
+              <td class="mono">${o.inspections}</td>
+              <td>${o.training_recommended ? `<span class="badge badge-medium">recommended</span>` : "—"}</td></tr>
+          `).join("")}
+        </tbody></table>` : `<div class="empty-state">No operator data available.</div>`;
+      } catch (err) {
+        insightsEl.innerHTML = `<div class="empty-state">Couldn't load operator intelligence.</div>`;
+      }
+    }
+
+    let learningChartInstance = null;
+    async function loadLearningTrend() {
+      const noteEl = document.getElementById("learning-note");
+      const tableEl = document.getElementById("learning-table");
+      try {
+        const data = await Api.learningTrend();
+        noteEl.textContent = data.note;
+
+        const labels = data.points.map((p) => p.week_label);
+        const values = data.points.map((p) => p.recommendation_accuracy_pct);
+        const pointColors = data.points.map((p) => (p.is_historical_seed ? "#0f766e" : "#e11d48"));
+
+        const ctx = document.getElementById("learning-chart").getContext("2d");
+        if (learningChartInstance) learningChartInstance.destroy();
+        if (typeof Chart !== "undefined") {
+          learningChartInstance = new Chart(ctx, {
+            type: "line",
+            data: { labels, datasets: [{ label: "Recommendation accuracy %", data: values,
+              borderColor: "#0f766e", backgroundColor: "#0f766e22", pointBackgroundColor: pointColors,
+              pointRadius: 5, tension: 0.25 }] },
+            options: { responsive: true, plugins: { legend: { display: false } },
+              scales: { y: { min: 60, max: 100, ticks: { color: "#64748b" }, grid: { color: "#e2e8f0" } },
+                        x: { ticks: { color: "#64748b" }, grid: { display: false } } } },
+          });
+        }
+
+        tableEl.innerHTML = `<table><thead><tr><th>Period</th><th>Accuracy</th><th>Decisions</th><th>Source</th></tr></thead><tbody>
+          ${data.points.map((p) => `
+            <tr><td>${p.week_label}</td><td class="mono">${p.recommendation_accuracy_pct}%</td>
+              <td class="mono">${p.total_recommendations}</td>
+              <td>${p.is_historical_seed ? `<span class="badge badge-slate">seed history</span>` : `<span class="badge badge-teal">✨ live</span>`}</td></tr>
+          `).join("")}
+        </tbody></table>`;
+      } catch (err) {
+        noteEl.textContent = "Couldn't load learning trend.";
+      }
+    }
+
+    loadReports();
+  </script>
+</body>
+</html>

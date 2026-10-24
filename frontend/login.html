@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(180deg, #f8fafc 0%, #f0fdfa 100%); }
+  .login-card { width: 380px; max-width: 92vw; box-shadow: 0 10px 40px rgba(15,23,42,0.06); }
+  .login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .login-brand .mark { width: 34px; height: 34px; border-radius: 9px; background: var(--teal); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; }
+  .login-brand span.name { font-family: var(--font-display); font-size: 19px; font-weight: 700; }
+  .login-sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .demo-users { margin-top: 22px; }
+  .demo-users summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .demo-users table { margin-top: 10px; }
+  .demo-users td { font-size: 12px; padding: 6px 8px; }
+  .demo-users button { background: none; border: none; color: var(--teal); cursor: pointer; font-size: 12px; padding: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="card login-card">
+    <div class="login-brand"><div class="mark">Q</div><span class="name">QualityGuard AI</span></div>
+    <div class="login-sub">Sign in to the predictive quality control platform.</div>
+
+    <div id="error-slot"></div>
+
+    <form id="login-form">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%" id="submit-btn">Sign in</button>
+    </form>
+
+    <details class="demo-users">
+      <summary>Demo accounts (password: demo1234)</summary>
+      <table>
+        <tbody>
+          <tr><td>Operator (Line 3)</td><td class="mono">operator1</td><td><button data-user="operator1">Use</button></td></tr>
+          <tr><td>Maintenance</td><td class="mono">maintenance1</td><td><button data-user="maintenance1">Use</button></td></tr>
+          <tr><td>Production</td><td class="mono">production1</td><td><button data-user="production1">Use</button></td></tr>
+          <tr><td>Quality Manager</td><td class="mono">qualitymgr1</td><td><button data-user="qualitymgr1">Use</button></td></tr>
+          <tr><td>Plant Head</td><td class="mono">planthead1</td><td><button data-user="planthead1">Use</button></td></tr>
+          <tr><td>Admin</td><td class="mono">admin1</td><td><button data-user="admin1">Use</button></td></tr>
+          <tr><td>Procurement</td><td class="mono">procurement1</td><td><button data-user="procurement1">Use</button></td></tr>
+        </tbody>
+      </table>
+    </details>
+  </div>
+
+  <script type="module">
+    import { Api, Auth } from "./js/api.js";
+
+    if (Auth.isLoggedIn()) window.location.href = "dashboard.html";
+
+    const form = document.getElementById("login-form");
+    const errorSlot = document.getElementById("error-slot");
+    const submitBtn = document.getElementById("submit-btn");
+
+    document.querySelectorAll(".demo-users button[data-user]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.getElementById("username").value = btn.dataset.user;
+        document.getElementById("password").value = "demo1234";
+      });
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorSlot.innerHTML = "";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Signing in…";
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      try {
+        const result = await Api.login(username, password);
+        Auth.setSession(result.access_token, result.user);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        errorSlot.innerHTML = `<div class="error-banner">${err.detail || "Sign in failed. Check your username and password."}</div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Sign in";
+      }
+    });
+  </script>
+</body>
+</html>

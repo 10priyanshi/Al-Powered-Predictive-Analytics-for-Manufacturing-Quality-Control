@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="page-wrap">
+      <div class="page-header">
+        <div>
+          <h1>✨ AI Batch Quality Score</h1>
+          <div class="sub">The primary quality signal — combining sensor data, machine health, operator history, material quality, and environmental conditions into one score per batch.</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="bq-demo-mix-btn" style="display:none;" title="Demo helper: pushes a few active batches to medium/high risk so the risk spectrum is visible.">🎯 Seed risk mix (demo)</button>
+          <button class="btn btn-primary" id="bq-scan-btn">✨ Score active batches</button>
+        </div>
+      </div>
+
+      <section class="card" id="bq-card">
+        <div class="grid grid-machines" id="bq-grid">
+          <div class="loading-row">No batches scored yet — click "Score active batches".</div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:4px;">
+          <div>
+            <h3 style="margin-bottom:2px;">⚠ AI Deviation Predictions</h3>
+            <p class="sub" style="color:var(--muted); margin:0;">Sensors trending toward their normal-range boundary before they actually breach it — predicted from live trend fits, not detected after the fact.</p>
+          </div>
+          <button class="btn btn-sm" id="simulate-deviation-btn" title="Injects a real steep trend and runs the same prediction math on it, so you can see a critical-severity result on demand.">⚠ Simulate imminent deviation</button>
+        </div>
+        <div id="deviation-list"><div class="loading-row">Loading…</div></div>
+      </section>
+
+      <div class="page-header" style="margin-top:28px;">
+        <div>
+          <h1>Line &amp; Machine Status</h1>
+          <div class="sub" id="scope-note">Loading…</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="simulate-btn">▶ Simulate incoming data</button>
+          <button class="btn" id="refresh-btn">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div id="error-slot"></div>
+
+      <section class="card">
+        <h3>Status Grid</h3>
+        <div class="grid grid-machines" id="machine-grid">
+          <div class="loading-row">Loading machine status…</div>
+        </div>
+      </section>
+
+      <div class="two-col" style="margin-top:16px;">
+        <div>
+          <section class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <h3 style="margin-bottom:0;">Recommendations</h3>
+              <div class="tabs" style="border-bottom:none; margin-bottom:0;">
+                <button data-rec-view="pending" class="active" style="margin-right:12px; padding:4px 2px;">Pending</button>
+                <button data-rec-view="reviewed" style="padding:4px 2px;">Reviewed</button>
+              </div>
+            </div>
+            <div id="rec-list"><div class="loading-row">Loading…</div></div>
+          </section>
+
+          <section class="card" id="preprod-card" style="display:none">
+            <h3>Upcoming Batches Risk Queue</h3>
+            <p class="sub" style="color:var(--steel); margin-bottom:10px;">Not-yet-run scheduled batches, ranked by pre-production risk. Scoring never delays or cancels a batch automatically — every suggested action requires your Approve/Reject/Modify.</p>
+            <button class="btn btn-sm" id="preprod-scan-btn" style="margin-bottom:10px;">Scan scheduled batches</button>
+            <div id="preprod-list"><div class="loading-row">Not yet scanned.</div></div>
+          </section>
+        </div>
+
+        <div>
+          <section class="card">
+            <h3>Active Alerts</h3>
+            <div id="alert-list"><div class="loading-row">Loading…</div></div>
+            <div style="margin-top:10px;"><a href="alerts.html">View all alerts →</a></div>
+          </section>
+
+          <section class="card" id="perf-card" style="display:none">
+            <h3>Recommendation Feedback Loop</h3>
+            <div id="perf-body"></div>
+          </section>
+
+          <section class="card" id="flag-card" style="display:none">
+            <h3>Flag a defect</h3>
+            <form id="flag-form">
+              <div class="field">
+                <label>Machine ID</label>
+                <select id="flag-machine" required>
+                  <option value="">Loading machines…</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Batch ID (optional)</label>
+                <input type="text" id="flag-batch" placeholder="e.g. BATCH-4471" />
+              </div>
+              <div class="field">
+                <label>Defect type</label>
+                <select id="flag-type">
+                  <option value="scratch">Scratch</option>
+                  <option value="dimension_deviation">Dimension deviation</option>
+                  <option value="weld_crack">Weld crack</option>
+                  <option value="surface_contamination">Surface contamination</option>
+                  <option value="misalignment">Misalignment</option>
+                  <option value="porosity">Porosity</option>
+                  <option value="discoloration">Discoloration</option>
+                  <option value="incomplete_assembly">Incomplete assembly</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Location</label>
+                <input type="text" id="flag-location" placeholder="e.g. outlet, mid-section" required />
+              </div>
+              <div class="field">
+                <label>Notes</label>
+                <textarea id="flag-notes" rows="2"></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary" style="width:100%">Submit flag</button>
+            </form>
+          </section>
+        </div>
+      </div>
+  </main>
+
+  <div class="modal-overlay" id="bq-modal-overlay">
+    <div class="modal-box" id="bq-modal-box" style="position:relative;"></div>
+  </div>
+
+  <div class="modal-overlay" id="modify-modal-overlay">
+    <div class="modal-box" style="max-width:420px;">
+      <h3 style="margin-top:0;">Modify recommendation</h3>
+      <p class="sub" style="color:var(--steel); margin-bottom:14px;">
+        Describe what you changed about <strong id="modify-rec-id" class="mono"></strong> — this is saved with your review and shown in the audit trail.
+      </p>
+      <textarea id="modify-note-input" rows="3" placeholder="e.g. Recalibrate now, don't wait for next shift…" style="width:100%; resize:vertical;"></textarea>
+      <div id="modify-error" style="color:var(--red); font-size:12.5px; margin-top:6px; display:none;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button class="btn btn-sm" id="modify-cancel-btn">Cancel</button>
+        <button class="btn btn-sm btn-modify" id="modify-confirm-btn">Confirm modification</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Api, Auth, toast, fmtTime, fmtPct } from "./js/api.js";
+    import { renderNav } from "./js/nav.js";
+    import { mountChatWidget } from "./js/chat-widget.js";
+    import { riskGaugeSVG, qualityGaugeSVG } from "./js/gauge.js";
+
+    renderNav("dashboard");
+    mountChatWidget();
+    const user = Auth.getUser();
+    const OP_STATUS_LABELS = { running: "● Running", idle: "Idle", maintenance_due: "⚠ Maintenance Due" };
+
+    document.getElementById("scope-note").textContent = user.line_scope
+      ? `Scoped to ${user.line_scope} (your role's line assignment)`
+      : "Plant-wide view";
+
+    if (["production", "plant_head", "admin"].includes(user.role)) {
+      document.getElementById("preprod-card").style.display = "block";
+    }
+    if (["quality_manager", "plant_head", "admin"].includes(user.role)) {
+      document.getElementById("perf-card").style.display = "block";
+      document.getElementById("bq-demo-mix-btn").style.display = "inline-block";
+    }
+    if (user.role === "operator") {
+      document.getElementById("flag-card").style.display = "block";
+    }
+
+    function showError(msg) {
+      document.getElementById("error-slot").innerHTML = `<div class="error-banner">${msg}</div>`;
+    }
+
+    function populateFlagMachineOptions(machines) {
+      const select = document.getElementById("flag-machine");
+      if (!select) return;
+      if (!machines.length) {
+        select.innerHTML = `<option value="">No machines in your scope</option>`;
+        return;
+      }
+      select.innerHTML = machines
+        .map((m) => `<option value="${m.machine_id}">${m.machine_id} — ${m.machine_name}</option>`)
+        .join("");
+    }
+
+    async function loadMachineGrid() {
+      const grid = document.getElementById("machine-grid");
+      try {
+        const machines = await Api.dashboardStatus();
+        populateFlagMachineOptions(machines);
+        if (!machines.length) {
+          grid.innerHTML = `<div class="empty-state"><div class="glyph">◻</div>No machines in your current scope.</div>`;
+          return;
+        }
+        grid.innerHTML = machines.map((m) => `
+          <a class="machine-card risk-${m.risk_level}" href="machine.html?id=${encodeURIComponent(m.machine_id)}">
+            <div class="m-top">
+              <div>
+                <div class="m-id mono">${m.machine_id}</div>
+                <div class="m-name">${m.machine_name}</div>
+              </div>
+              <span class="badge badge-${m.risk_level}"><span class="dot"></span>${m.risk_level}</span>
+            </div>
+            <div class="m-body">
+              <div class="gauge-wrap">${riskGaugeSVG(m.risk_score, 108)}</div>
+              <span class="op-status ${m.operational_status}">${OP_STATUS_LABELS[m.operational_status] || m.operational_status}</span>
+            </div>
+            <div class="m-foot">
+              <span>${m.active_alert_count} active alert${m.active_alert_count === 1 ? "" : "s"}</span>
+              <span>svc: ${m.last_maintenance_date ? fmtTime(m.last_maintenance_date) : "—"}</span>
+            </div>
+          </a>
+        `).join("");
+      } catch (err) {
+        showError(`Couldn't load machine status: ${err.detail || err.message}`);
+      }
+    }
+
+    function renderBatchQualityCard(b) {
+      return `
+        <div class="machine-card bq-card risk-${b.risk_level}" data-wo="${b.work_order_id}">
+          <div class="m-top">
+            <div>
+              <div class="m-id mono">${b.work_order_id}</div>
+              <div class="m-name">${b.batch_id}</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+              <span class="badge badge-${b.risk_level}"><span class="dot"></span>${b.risk_level} risk</span>
+              ${b.is_live ? `<span class="live-badge"><span class="pulse"></span>Live</span>` : ""}
+            </div>
+          </div>
+          <div class="m-body">
+            <div class="gauge-wrap">${qualityGaugeSVG(b.quality_score, 100)}</div>
+            <div style="text-align:right; font-size:11px; color:var(--muted);">
+              <div>Inspect: <b class="mono" style="color:var(--teal);">${b.sampling_rate_pct}%</b></div>
+            </div>
+          </div>
+          <div class="bq-expand-hint">click for details ⤢</div>
+        </div>
+      `;
+    }
+
+    const bqDataById = new Map();
+
+    function openBatchModal(b) {
+      const overlay = document.getElementById("bq-modal-overlay");
+      const box = document.getElementById("bq-modal-box");
+      box.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
+          <div>
+            <div class="m-id mono">${b.work_order_id}</div>
+            <h3 style="margin:2px 0 0; font-size:18px; text-transform:none; color:var(--ink); letter-spacing:0;">${b.batch_id}</h3>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+            <span class="badge badge-${b.risk_level}"><span class="dot"></span>${b.risk_level} risk</span>
+            ${b.is_live ? `<span class="live-badge"><span class="pulse"></span>Live</span>` : ""}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:18px; margin:14px 0;">
+          <div class="gauge-wrap">${qualityGaugeSVG(b.quality_score, 130)}</div>
+          <div style="font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:6px;">
+            <div>Pass QC: <b class="mono" style="color:var(--ink); font-size:14px;">${b.probability_passing_qc}%</b></div>
+            <div>Confidence: <b class="mono" style="color:var(--ink); font-size:14px;">${(b.confidence * 100).toFixed(0)}%</b></div>
+            ${b.llm_generated ? `<span class="ai-badge" style="width:fit-content;">✨ Claude</span>` : ""}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; padding:8px 10px; background:var(--card-alt); border-radius:8px;">
+          <span style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted);">Inspect</span>
+          <span class="mono" style="font-weight:700; color:var(--teal);">${b.sampling_rate_pct}%</span>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">${b.sampling_rationale}</div>
+        <div style="font-size:13px; color:var(--ink); margin-bottom:12px; line-height:1.5; padding:10px; background:var(--card-alt); border-radius:8px;">${b.ai_summary}</div>
+        ${b.contributing_factors.length ? `
+          <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); margin-bottom:5px;">Contributing factors</div>
+          <ul style="margin:0 0 12px; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6;">
+            ${b.contributing_factors.map((f) => `<li>${f}</li>`).join("")}
+          </ul>
+        ` : ""}
+        <div class="m-foot" style="border-top:1px solid var(--border); padding-top:10px; display:flex; justify-content:space-between;">
+          <span class="mono">${b.machine_id}</span><span>computed ${fmtTime(b.computed_at)}</span>
+        </div>
+      `;
+      overlay.classList.add("open");
+      document.getElementById("bq-modal-close").addEventListener("click", closeBatchModal);
+    }
+
+    function closeBatchModal() {
+      document.getElementById("bq-modal-overlay").classList.remove("open");
+    }
+
+    document.getElementById("bq-modal-overlay").addEventListener("click", (e) => {
+      if (e.target.id === "bq-modal-overlay") closeBatchModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeBatchModal();
+    });
+
+    async function loadBatchQuality() {
+      const grid = document.getElementById("bq-grid");
+      try {
+        const batches = await Api.batchQualityList();
+        if (!batches.length) {
+          grid.innerHTML = `<div class="empty-state"><div class="glyph">✨</div>No batches scored yet — click "Score active batches" above.</div>`;
+          return;
+        }
+        const shown = batches.slice().sort((a, b) => (b.is_live - a.is_live) || (a.quality_score - b.quality_score)).slice(0, 8);
+        bqDataById.clear();
+        shown.forEach((b) => bqDataById.set(b.work_order_id, b));
+        grid.innerHTML = shown.map(renderBatchQualityCard).join("");
+        grid.querySelectorAll(".bq-card").forEach((card) => {
+          card.addEventListener("click", () => openBatchModal(bqDataById.get(card.dataset.wo)));
+        });
+      } catch (err) {
+        grid.innerHTML = `<div class="empty-state">Couldn't load batch quality scores.</div>`;
+      }
+    }
+
+    document.getElementById("bq-scan-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "✨ Scoring…";
+      try {
+        await Api.batchQualityScan();
+        await loadBatchQuality();
+        toast("Batch quality scores updated.");
+      } catch (err) {
+        toast(err.detail || "Could not score batches.", "error");
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = "✨ Score active batches";
+      }
+    });
+
+    document.getElementById("bq-demo-mix-btn")?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "🎯 Seeding…";
+      try {
+        await Api.batchQualityDemoRiskMix();
+        await loadBatchQuality();
+        toast("Demo risk mix seeded — a few batches are now medium/high risk.");
+      } catch (err) {
+        toast(err.detail || "Could not seed demo data.", "error");
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = "🎯 Seed risk mix (demo)";
+      }
+    });
+
+    async function loadDeviations() {
+      const mount = document.getElementById("deviation-list");
+      try {
+        const preds = await Api.deviationPredictions();
+        if (!preds.length) {
+          mount.innerHTML = `<div class="empty-state"><div class="glyph">✓</div>No sensors currently trending toward a boundary.</div>`;
+          return;
+        }
+        mount.innerHTML = `<table><thead><tr>
+          <th>Machine</th><th>Predicted Deviation</th><th>Probability</th><th>Expected In</th><th>Severity</th>
+        </tr></thead><tbody>
+          ${preds.map((p) => `
+            <tr>
+              <td class="mono">${p.machine_id}</td>
+              <td>${p.deviation_type}<div style="font-size:11px; color:var(--muted);">${p.based_on}</div></td>
+              <td class="mono">${p.probability}%</td>
+              <td class="mono">${p.expected_in_minutes < 60 ? p.expected_in_minutes + " min" : (p.expected_in_minutes / 60).toFixed(1) + " h"}</td>
+              <td><span class="chip chip-${p.severity}">${p.severity}</span></td>
+            </tr>
+          `).join("")}
+        </tbody></table>`;
+      } catch (err) {
+        mount.innerHTML = `<div class="empty-state">Couldn't load deviation predictions.</div>`;
+      }
+    }
+
+    document.getElementById("simulate-deviation-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "⚠ Simulating…";
+      try {
+        const machines = await Api.dashboardStatus();
+        if (!machines.length) throw new Error("No machines in scope to simulate on.");
+        const target = machines[Math.floor(Math.random() * machines.length)];
+        const sensorTypes = ["temperature", "pressure", "vibration", "humidity"];
+        const sensorType = sensorTypes[Math.floor(Math.random() * sensorTypes.length)];
+        const result = await Api.simulateImminentDeviation(target.machine_id, sensorType);
+        if (result.prediction) {
+          toast(`Critical deviation on ${result.machine_id}: ${result.prediction.deviation_type} — crossing in ~${result.prediction.expected_in_minutes} min.`);
+        } else {
+          toast(`Injected trend on ${result.machine_id}, but it didn't qualify as a prediction — try again.`, "error");
+        }
+        await loadDeviations();
+      } catch (err) {
+        toast(err.detail || err.message || "Could not simulate deviation.", "error");
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = "⚠ Simulate imminent deviation";
+      }
+    });
+
+    async function loadAlerts() {
+      const list = document.getElementById("alert-list");
+      try {
+        const alerts = await Api.listAlerts();
+        const active = alerts.filter((a) => a.status !== "acknowledged").slice(0, 6);
+        if (!active.length) {
+          list.innerHTML = `<div class="empty-state"><div class="glyph">✓</div>No active alerts.</div>`;
+          return;
+        }
+        list.innerHTML = active.map((a) => `
+          <div style="padding:8px 0; border-bottom:1px solid var(--line);">
+            <div style="display:flex; justify-content:space-between; gap:8px;">
+              <span class="chip chip-${a.severity}"><span class="led"></span>${a.severity}</span>
+              <span class="mono" style="font-size:11px; color:var(--steel)">${fmtTime(a.created_at)}</span>
+            </div>
+            <div style="margin-top:6px; font-size:13px;">${a.title}</div>
+          </div>
+        `).join("");
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Couldn't load alerts.</div>`;
+      }
+    }
+
+    let currentRecView = "pending";
+
+    async function loadRecommendations() {
+      const list = document.getElementById("rec-list");
+      list.innerHTML = `<div class="loading-row">Loading…</div>`;
+      try {
+        if (currentRecView === "pending") {
+          const recs = (await Api.listRecommendations("pending")).filter((r) => r.source_type !== "preprod_batch");
+          if (!recs.length) {
+            list.innerHTML = `<div class="empty-state"><div class="glyph">✓</div>Nothing pending your review.</div>`;
+            return;
+          }
+          list.innerHTML = recs.slice(0, 8).map(renderRecRow).join("");
+          attachRecHandlers(list);
+        } else {
+          const all = await Api.listRecommendations();
+          const reviewed = all
+            .filter((r) => r.status !== "pending" && r.source_type !== "preprod_batch")
+            .sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at));
+          if (!reviewed.length) {
+            list.innerHTML = `<div class="empty-state"><div class="glyph">—</div>No recommendations have been reviewed yet.</div>`;
+            return;
+          }
+          list.innerHTML = reviewed.slice(0, 10).map(renderReviewedRecRow).join("");
+        }
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Couldn't load recommendations.</div>`;
+      }
+    }
+
+    document.querySelectorAll("[data-rec-view]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-rec-view]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentRecView = btn.dataset.recView;
+        loadRecommendations();
+      });
+    });
+
+    // Pulls a crisp category label straight out of the RCA reasoning text
+    // itself (e.g. "...assigned this defect primarily to 'material'...")
+    // rather than guessing from assigned_role, since a role like
+    // Production covers two categories (process + human) - reading the
+    // actual RCA output gives the precise one, not just the routed role.
+    function categoryBadge(reasoning) {
+      const m = (reasoning || "").match(/assigned this defect primarily to '(\w+)'/i);
+      const cat = m ? m[1].toLowerCase() : null;
+      const map = {
+        equipment: { label: "Equipment issue", cls: "chip-info" },
+        material: { label: "Material issue", cls: "chip-warning" },
+        process: { label: "Process issue", cls: "chip-low" },
+        human: { label: "Human error", cls: "chip-critical" },
+      };
+      return map[cat] || null;
+    }
+
+    function renderRecRow(r) {
+      const badge = categoryBadge(r.reasoning);
+      return `
+        <div class="explain" data-rec-id="${r.recommendation_id}" style="margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <strong style="font-size:13px;">${r.recommendation_id}</strong>
+              ${badge ? `<span class="chip ${badge.cls}"><span class="led"></span>${badge.label}</span>` : ""}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${r.llm_generated ? `<span class="ai-badge">✨ Claude</span>` : ""}
+              <span class="mono" style="font-size:11px; color:var(--muted)">confidence ${(r.confidence * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+          <div style="margin:6px 0;">${r.action_text}</div>
+          <div style="font-size:12px; color:var(--muted);">${r.reasoning}</div>
+          <div class="confidence-bar"><span style="width:${r.confidence * 100}%"></span></div>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <button class="btn btn-sm btn-approve" data-action="approve">Approve</button>
+            <button class="btn btn-sm btn-reject" data-action="reject">Reject</button>
+            <button class="btn btn-sm btn-modify" data-action="modify">Modify…</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReviewedRecRow(r) {
+      const badge = categoryBadge(r.reasoning);
+      return `
+        <div class="explain" style="margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <strong style="font-size:13px;">${r.recommendation_id}</strong>
+              ${badge ? `<span class="chip ${badge.cls}"><span class="led"></span>${badge.label}</span>` : ""}
+            </div>
+            <span class="badge badge-${r.status}">${r.status}</span>
+          </div>
+          <div style="margin:6px 0;">${r.action_text}</div>
+          ${r.modification_note ? `<div style="font-size:12px; color:var(--amber);"><b>Modified:</b> ${r.modification_note}</div>` : ""}
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">Reviewed by ${r.reviewed_by} · ${fmtTime(r.reviewed_at)}</div>
+        </div>
+      `;
+    }
+
+    async function submitReview(recId, action, note, row) {
+      try {
+        await Api.reviewRecommendation(recId, action, note);
+        toast(`Recommendation ${recId} ${action === "modify" ? "modified" : action + "d"}.`);
+        row?.remove();
+        loadPerformance();
+        return true;
+      } catch (err) {
+        toast(err.detail || "Review failed.", "error");
+        return false;
+      }
+    }
+
+    // ---- Modify modal (replaces the native browser prompt()) ----
+    const modifyOverlay = document.getElementById("modify-modal-overlay");
+    const modifyInput = document.getElementById("modify-note-input");
+    const modifyError = document.getElementById("modify-error");
+    const modifyRecIdLabel = document.getElementById("modify-rec-id");
+    let modifyContext = null; // { recId, row }
+
+    function openModifyModal(recId, row) {
+      modifyContext = { recId, row };
+      modifyRecIdLabel.textContent = recId;
+      modifyInput.value = "";
+      modifyError.style.display = "none";
+      modifyOverlay.classList.add("open");
+      setTimeout(() => modifyInput.focus(), 50);
+    }
+    function closeModifyModal() {
+      modifyOverlay.classList.remove("open");
+      modifyContext = null;
+    }
+    document.getElementById("modify-cancel-btn").addEventListener("click", closeModifyModal);
+    modifyOverlay.addEventListener("click", (e) => { if (e.target.id === "modify-modal-overlay") closeModifyModal(); });
+    document.getElementById("modify-confirm-btn").addEventListener("click", async () => {
+      const note = modifyInput.value.trim();
+      if (!note) {
+        modifyError.textContent = "Please describe what you changed before confirming.";
+        modifyError.style.display = "block";
+        return;
+      }
+      if (!modifyContext) return;
+      const { recId, row } = modifyContext;
+      const ok = await submitReview(recId, "modify", note, row);
+      if (ok) closeModifyModal();
+    });
+
+    function attachRecHandlers(container) {
+      container.querySelectorAll("button[data-action]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const row = btn.closest("[data-rec-id]");
+          const recId = row.dataset.recId;
+          const action = btn.dataset.action;
+          if (action === "modify") {
+            openModifyModal(recId, row);
+            return;
+          }
+          await submitReview(recId, action, null, row);
+        });
+      });
+    }
+
+    async function loadPreprod() {
+      const list = document.getElementById("preprod-list");
+      try {
+        const queue = await Api.preprodQueue();
+        if (!queue.length) {
+          list.innerHTML = `<div class="empty-state">No scored scheduled batches yet — click "Scan scheduled batches".</div>`;
+          return;
+        }
+        list.innerHTML = `<table><thead><tr><th>Work Order</th><th>Risk</th><th>Suggested Action</th><th>Status</th></tr></thead><tbody>
+          ${queue.map((q) => `
+            <tr>
+              <td class="mono">${q.work_order_id}</td>
+              <td><span class="chip chip-${q.risk_score >= 66 ? "high" : q.risk_score >= 33 ? "medium" : "low"}">${q.risk_score.toFixed(0)}%</span></td>
+              <td style="max-width:280px;">${q.suggested_action}</td>
+              <td><span class="chip chip-${q.status}">${q.status}</span></td>
+            </tr>
+          `).join("")}
+        </tbody></table>`;
+      } catch (err) {
+        list.innerHTML = `<div class="empty-state">Couldn't load the risk queue.</div>`;
+      }
+    }
+
+    async function loadPerformance() {
+      if (document.getElementById("perf-card").style.display === "none") return;
+      const body = document.getElementById("perf-body");
+      try {
+        const perf = await Api.modelPerformance();
+        body.innerHTML = `
+          <div class="readout mono" style="font-size:26px; color:var(--accent);">${perf.approval_rate !== null ? fmtPct(perf.approval_rate * 100) : "—"}</div>
+          <div class="sub" style="color:var(--steel); margin-bottom:10px;">approved or modified, of all decided recommendations</div>
+          <table>
+            <tr><td>Approved</td><td class="mono">${perf.approved}</td></tr>
+            <tr><td>Modified</td><td class="mono">${perf.modified}</td></tr>
+            <tr><td>Rejected</td><td class="mono">${perf.rejected}</td></tr>
+            <tr><td>Pending</td><td class="mono">${perf.pending}</td></tr>
+          </table>
+        `;
+      } catch (err) {
+        body.innerHTML = `<div class="empty-state">Couldn't load performance data.</div>`;
+      }
+    }
+
+    document.getElementById("simulate-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "Simulating…";
+      try {
+        const result = await Api.simulateTick();
+        toast(`Ingested ${result.sensor_readings_ingested} readings — ${result.alerts_created} new alert(s), ${result.recommendations_created} new recommendation(s).`);
+        await loadAll();
+      } catch (err) {
+        toast(err.detail || "Simulation failed.", "error");
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = "▶ Simulate incoming data";
+      }
+    });
+
+    document.getElementById("refresh-btn").addEventListener("click", loadAll);
+    document.getElementById("preprod-scan-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "Scanning…";
+      try {
+        await Api.preprodScan();
+        await loadPreprod();
+        toast("Scheduled batches scored.");
+      } catch (err) {
+        toast(err.detail || "Scan failed.", "error");
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = "Scan scheduled batches";
+      }
+    });
+
+    const flagForm = document.getElementById("flag-form");
+    if (flagForm) {
+      flagForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const defect = await Api.flagDefect({
+            machine_id: document.getElementById("flag-machine").value.trim(),
+            batch_id: document.getElementById("flag-batch").value.trim() || null,
+            defect_type: document.getElementById("flag-type").value,
+            location: document.getElementById("flag-location").value.trim(),
+            notes: document.getElementById("flag-notes").value.trim() || null,
+          });
+          toast(`Defect ${defect.defect_id} flagged — alert raised and routed for review.`);
+          flagForm.reset();
+          // Refresh right here, on this screen, so the new alert is visible
+          // immediately rather than requiring a manual page reload.
+          await Promise.all([loadAlerts(), renderNav("dashboard")]);
+        } catch (err) {
+          toast(err.detail || "Could not flag defect.", "error");
+        }
+      });
+    }
+
+    async function loadAll() {
+      document.getElementById("error-slot").innerHTML = "";
+      await Promise.all([loadMachineGrid(), loadAlerts(), loadRecommendations(), loadPerformance(), loadBatchQuality(), loadDeviations()]);
+      if (document.getElementById("preprod-card").style.display !== "none") loadPreprod();
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>

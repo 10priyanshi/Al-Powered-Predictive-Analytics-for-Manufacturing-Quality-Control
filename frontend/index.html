@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>QualityGuard AI</title>
+</head>
+<body style="background:#12151a">
+  <script type="module">
+    import { Auth } from "./js/api.js";
+    window.location.href = Auth.isLoggedIn() ? "dashboard.html" : "landing.html";
+  </script>
+</body>
+</html>

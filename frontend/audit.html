@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Audit Log — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="page-wrap">
+      <div class="page-header">
+        <div>
+          <h1>Audit Log</h1>
+          <div class="sub">Every prediction, alert, recommendation, and human decision — who (by role), what, and when.</div>
+        </div>
+      </div>
+
+      <section class="card">
+        <form id="filter-form" class="grid" style="grid-template-columns: repeat(3, 1fr) auto; align-items:end;">
+          <div class="field" style="margin:0;">
+            <label>Role</label>
+            <select id="filter-role">
+              <option value="">All</option>
+              <option value="system">System (agents)</option>
+              <option value="operator">Operator</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="production">Production</option>
+              <option value="quality_manager">Quality Manager</option>
+              <option value="plant_head">Plant Head</option>
+              <option value="admin">Admin</option>
+              <option value="procurement">Procurement</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Action type</label>
+            <input type="text" id="filter-action" placeholder="e.g. recommendation_approve" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Entity type</label>
+            <input type="text" id="filter-entity" placeholder="e.g. recommendation" />
+          </div>
+          <button class="btn btn-primary" id="filter-btn" style="height:38px;">Filter</button>
+        </form>
+      </section>
+
+      <div id="error-slot"></div>
+      <section class="card">
+        <div id="audit-table"><div class="loading-row">Loading…</div></div>
+      </section>
+  </main>
+
+  <script type="module">
+    import { Api, toast, fmtTime } from "./js/api.js";
+    import { renderNav } from "./js/nav.js";
+    import { mountChatWidget } from "./js/chat-widget.js";
+
+    renderNav("audit");
+    mountChatWidget();
+
+    async function load() {
+      const mount = document.getElementById("audit-table");
+      mount.innerHTML = `<div class="loading-row">Loading…</div>`;
+      const params = {};
+      const role = document.getElementById("filter-role").value;
+      const action = document.getElementById("filter-action").value.trim();
+      const entity = document.getElementById("filter-entity").value.trim();
+      if (role) params.role_filter = role;
+      if (action) params.action_type = action;
+      if (entity) params.entity_type = entity;
+
+      try {
+        const entries = await Api.listAudit(params);
+        if (!entries.length) {
+          mount.innerHTML = `<div class="empty-state">No audit entries match this filter.</div>`;
+          return;
+        }
+        mount.innerHTML = `<table><thead><tr>
+          <th>Time</th><th>Role</th><th>User</th><th>Action</th><th>Entity</th><th>Outcome</th>
+        </tr></thead><tbody>
+          ${entries.map((e) => `
+            <tr>
+              <td class="mono">${fmtTime(e.timestamp)}</td>
+              <td><span class="chip chip-info">${e.role}</span></td>
+              <td>${e.username || "—"}</td>
+              <td class="mono">${e.action_type}</td>
+              <td class="mono">${e.entity_type}:${e.entity_id}</td>
+              <td>${e.outcome || "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody></table>`;
+      } catch (err) {
+        document.getElementById("error-slot").innerHTML = `<div class="error-banner">${err.detail || err.message}</div>`;
+        mount.innerHTML = "";
+      }
+    }
+
+    document.getElementById("filter-btn").addEventListener("click", (e) => { e.preventDefault(); load(); });
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Alerts — QualityGuard AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="page-wrap">
+      <div class="page-header">
+        <div>
+          <h1>Alerts</h1>
+          <div class="sub">In-app alert feed — what triggered it, the agent's explanation, and the recommended action.</div>
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button data-filter="" class="active">All</button>
+        <button data-filter="unread">Unread</button>
+        <button data-filter="critical-only">Critical</button>
+      </div>
+
+      <div id="error-slot"></div>
+      <div id="alert-feed"><div class="loading-row">Loading alerts…</div></div>
+  </main>
+
+  <script type="module">
+    import { Api, toast, fmtTime } from "./js/api.js";
+    import { renderNav } from "./js/nav.js";
+    import { mountChatWidget } from "./js/chat-widget.js";
+
+    renderNav("alerts");
+    mountChatWidget();
+
+    let currentFilter = "";
+    let recCache = null;
+
+    async function getRecommendationForDefect(defectId) {
+      if (!recCache) {
+        try { recCache = await Api.listRecommendations(); } catch { recCache = []; }
+      }
+      return recCache.find((r) => r.source_type === "defect" && r.source_id === defectId);
+    }
+
+    function severityRank(sev) { return { critical: 0, warning: 1, info: 2 }[sev] ?? 3; }
+
+    async function load() {
+      const feed = document.getElementById("alert-feed");
+      feed.innerHTML = `<div class="loading-row">Loading alerts…</div>`;
+      recCache = null;
+      try {
+        let alerts = await Api.listAlerts(currentFilter === "unread" ? "unread" : undefined);
+        if (currentFilter === "critical-only") alerts = alerts.filter((a) => a.severity === "critical");
+        alerts.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || new Date(b.created_at) - new Date(a.created_at));
+
+        if (!alerts.length) {
+          feed.innerHTML = `<div class="empty-state"><div class="glyph">✓</div>No alerts match this filter.</div>`;
+          return;
+        }
+
+        feed.innerHTML = alerts.map((a) => `
+          <div class="card" data-alert-id="${a.alert_id}" style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+              <div>
+                <span class="chip chip-${a.severity}"><span class="led"></span>${a.severity}</span>
+                <span class="chip chip-${a.status === "unread" ? "info" : a.status}" style="margin-left:6px;">${a.status}</span>
+                <div style="font-size:15px; margin-top:8px;">${a.title}</div>
+                <div style="font-size:13px; color:var(--steel-light); margin-top:4px;">${a.description}</div>
+                <div style="font-size:11px; color:var(--steel); margin-top:6px;" class="mono">
+                  ${a.machine_id || "—"} · ${fmtTime(a.created_at)} · source: ${a.source_agent}
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                ${a.status === "unread" ? `<button class="btn btn-sm" data-action="read">Mark read</button>` : ""}
+                ${a.status !== "acknowledged" ? `<button class="btn btn-sm btn-approve" data-action="ack">Acknowledge</button>` : ""}
+              </div>
+            </div>
+            <div class="rec-mount" style="margin-top:10px;"></div>
+          </div>
+        `).join("");
+
+        for (const a of alerts) {
+          const row = feed.querySelector(`[data-alert-id="${a.alert_id}"]`);
+          row.querySelector('[data-action="read"]')?.addEventListener("click", async (e) => {
+            await Api.markAlertRead(a.alert_id);
+            load();
+          });
+          row.querySelector('[data-action="ack"]')?.addEventListener("click", async (e) => {
+            try {
+              await Api.acknowledgeAlert(a.alert_id);
+              toast(`Alert ${a.alert_id} acknowledged.`);
+              load();
+            } catch (err) { toast(err.detail || "Could not acknowledge.", "error"); }
+          });
+
+          if (a.related_defect_id) {
+            const rec = await getRecommendationForDefect(a.related_defect_id);
+            const mount = row.querySelector(".rec-mount");
+            if (rec) {
+              mount.innerHTML = `
+                <div class="explain">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="font-size:12px;">Linked recommendation (${rec.recommendation_id}) — ${rec.status}</strong>
+                    ${rec.llm_generated ? `<span class="ai-badge">✨ Claude</span>` : ""}
+                  </div>
+                  <div style="margin:6px 0;">${rec.action_text}</div>
+                  <div style="font-size:12px; color:var(--muted);">${rec.reasoning}</div>
+                  ${rec.status === "pending" ? `
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                      <button class="btn btn-sm btn-approve" data-rec-action="approve">Approve</button>
+                      <button class="btn btn-sm btn-reject" data-rec-action="reject">Reject</button>
+                      <button class="btn btn-sm btn-modify" data-rec-action="modify">Modify…</button>
+                    </div>` : `<div style="font-size:11px; color:var(--muted); margin-top:6px;">Reviewed by ${rec.reviewed_by} at ${fmtTime(rec.reviewed_at)}</div>`}
+                </div>
+              `;
+              mount.querySelectorAll("[data-rec-action]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                  const action = btn.dataset.recAction;
+                  let note = null;
+                  if (action === "modify") { note = prompt("What did you change?"); if (!note) return; }
+                  try {
+                    await Api.reviewRecommendation(rec.recommendation_id, action, note);
+                    toast(`Recommendation ${action === "modify" ? "modified" : action + "d"}.`);
+                    load();
+                  } catch (err) { toast(err.detail || "Review failed.", "error"); }
+                });
+              });
+            }
+          }
+        }
+      } catch (err) {
+        document.getElementById("error-slot").innerHTML = `<div class="error-banner">${err.detail || err.message}</div>`;
+        feed.innerHTML = "";
+      }
+    }
+
+    document.querySelectorAll("#tabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#tabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentFilter = btn.dataset.filter;
+        load();
+      });
+    });
+
+    load();
+  </script>
+</body>
+</html>
